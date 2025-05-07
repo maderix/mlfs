@@ -1,0 +1,56 @@
+[build-system]
+requires = ["setuptools>=42", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "mlfs"
+version = "0.1.0" # Initial version
+authors = [
+  { name="maderix", email="maderix@gmail.com" },
+]
+description = "MLFS: Mount your PyTorch model like a USB stick and cd straight into its brain."
+readme = "README.md"
+requires-python = ">=3.8"
+license = { file="LICENSE" }
+keywords = ["machine learning", "pytorch", "fuse", "filesystem", "model introspection", "debug", "mlops"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: POSIX :: Linux",
+    "Operating System :: MacOS",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+    "Topic :: System :: Filesystems",
+]
+dependencies = [
+    "fusepy",
+    "numpy",
+    "psutil",
+    "torch>=2.6",
+    "torchvision>=0.19",
+]
+
+[project.optional-dependencies]
+demo = ["transformers>=4.40"] # For the transformers-based demo
+dev = ["build", "twine", "pytest"] # For building, publishing, and testing
+
+[project.urls]
+"Homepage" = "https://github.com/maderix/mlfs"
+"Repository" = "https://github.com/maderix/mlfs"
+"Bug Tracker" = "https://github.com/maderix/mlfs/issues"
+
+# This will make `mlfs` command available, pointing to mlfs.main()
+[project.scripts]
+mlfs = "mlfs:main"
+
+# This tells setuptools to treat mlfs.py in the root directory as a module named 'mlfs'
+[tool.setuptools]
+py-modules = ["mlfs"] 

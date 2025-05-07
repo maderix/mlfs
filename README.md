@@ -1,4 +1,4 @@
-# 🍣 MLFS – Machine Learning File­system 🍣
+# 💃🔥 MLFS – Machine Learning File­system 💃🔥
 
 *Mount your model like a USB stick and `cd` straight into its brain.*
 
@@ -86,6 +86,22 @@ Watch it:
 sudo python3 examples/resnet_demo.py
 ```
 
+## 🕰️ Git‑Time‑Machine Demo (🚀 new!)
+```
+python examples/git_time_machine_demo.py
+```
+🕸️ MLFS mounts Inception v3 as regular files.
+```
+📸 git commit of /model = v1.
+```
+🔪 Flip one byte in a weight via the FS, commit again = v2.
+```
+git diff shows a ☝️‑byte hex delta.
+```
+⏪ git checkout v1 rewinds the network instantly—no reloads, no downtime.
+
+## 🎉 Your neural net now responds to git log, git diff, and git checkout like any ordinary code repo.  Time‑travel debugging with zero custom tools!
+
 This heftier demo lists deep sub‑blocks (`layer1/0/conv1`) and dumps the raw conv1 tensor to prove MLFS handles real architectures.
 
 ---
@@ -109,13 +125,20 @@ This heftier demo lists deep sub‑blocks (`layer1/0/conv1`) and dumps the raw c
 
 ---
 
-## 🗺️  Roadmap (a.k.a. TODO or bust)
 
-* 🐛 Refactor single‑file prototype → proper package.
-* 📦 `pip install mlfs` dream.
-* 📊 Auto‑populate `/activations/<timestamp>/` on forward hooks.
-* ✍️ Writable weight surgery (`echo 0.0 > …/weight.bin`).
-* 🌌 mmap‑backed giant‑model support.
+## 🔭 Roadmap — where MLFS can venture next 🚀
+
+| Track | What it buys you | Effort estimate | Caveats / Gotchas |
+|-------|------------------|-----------------|-------------------|
+| **ONNX / TensorFlow / TFLite back‑ends** | Mount *any* framework’s weights→ same tree → cross‑tool diffing & hacks | **Medium** – parse each format once, expose tensors as `memoryview` | ONNX & TF easy (protobuf blobs); TFLite flatbuffers parser needed |
+| **GPU‑mmap weights (GPUDirect Storage)** | Model bytes stream straight from file into GPU memory – no CPU copy, instant warm‑up | **Hard** – integrate `cuFile` / `cudaMallocHost` pinned pages | Requires A100/H100‑class HW + kernel mods |
+| **Lazy safetensors index** | Sub‑second mount of 20 GB Llama; chunk‑SHA dedup across checkpoints | **Medium** – we already mmap safetensors, add index & cache | — |
+| **Write‑back plugin** | FS edits → regenerate `.pt` / `.safetensors` automatically | **Easy** – invert `build_tree`, embed dtype/shape in `/sys` | — |
+| **Activation shared‑memory taps** | Another process can `mmap` live feature maps → real‑time viz | **Medium‑Hard** – expose `/activations/*` as shm, need sync | Needs inotify/futex protocol |
+| **FUSE‑dmabuf zero‑copy tensors** | Kernel hands GPU a dmabuf handle → true zero‑copy train | **Research** – pending upstream FUSE patches | bleeding‑edge kernel only |
+
+> **Legend** – *Effort* ≈ weekend hack = Easy, few weekends = Medium, research rabbit‑hole = Hard
+
 
 ---
 

@@ -1,0 +1,14 @@
+# Core runtime
+fusepy
+numpy
+psutil
+
+# PyTorch stack (CPU wheels by default; add +cu118 etc. if you want CUDA)
+torch>=2.6
+torchvision>=0.19
+
+# Large‑model mmap demo
+transformers>=4.40           # for GPT‑2 download & save
+
+# (Optional) the tiny tree listing used in quick_demo.py
+tree-cli ; platform_system == "Linux"
