@@ -23,7 +23,12 @@ MLFS is a tiny <abbr title="Filesystem in Userspace">FUSE</abbr> driver that tur
 ## ⚡️ 10‑second install
 
 ```bash
-sudo apt install fuse              # (Linux) – macOS: brew install macfuse
+# Linux
+apt install fuse              # or your distro's package manager
+# macOS
+brew install macfuse
+
+# Python packages
 pip install torch torchvision fusepy onnx
 ```
 
@@ -32,33 +37,33 @@ pip install torch torchvision fusepy onnx
 ## 🎸  Mount n' Roll
 
 ```bash
-# make a playground mountpoint
-sudo mkdir -p /mnt/mlfs
+# Create a temporary mount point in your home directory
+mkdir -p ~/mlfs_mount
 
-# export any .pt or .onnx you like (here we cook a ResNet‑18)
+# Export any .pt or .onnx you like (here we cook a ResNet‑18)
 python - <<'PY'
 import torch, torchvision as tv
 torch.save(tv.models.resnet18(weights=None), 'resnet18.pt')
 PY
 
-# fire it up (foreground, ctrl‑c to quit)
-sudo ./mlfs.py --model resnet18.pt --mount /mnt/mlfs --foreground
+# Fire it up (foreground, ctrl‑c to quit)
+./mlfs.py --model resnet18.pt --mount ~/mlfs_mount --foreground
 ```
 
 Now try the shell‑fu:
 
 ```bash
-ls /mnt/mlfs/model/conv1
-hexdump -C /mnt/mlfs/model/conv1/weight.bin | head -n 4
+ls ~/mlfs_mount/model/conv1
+hexdump -C ~/mlfs_mount/model/conv1/weight.bin | head -n 4
 
-echo "hello log👋" | sudo tee -a /mnt/mlfs/logs/fuse.log
+echo "hello log👋" >> ~/mlfs_mount/logs/fuse.log
 ```
 
 Unmount when done:
 
 ```bash
-sudo fusermount -u /mnt/mlfs   # linux
-# sudo umount /mnt/mlfs        # macOS
+fusermount -u ~/mlfs_mount   # linux
+# umount ~/mlfs_mount        # macOS
 ```
 
 ---
@@ -67,7 +72,7 @@ sudo fusermount -u /mnt/mlfs   # linux
 
 ```bash
 cd mlfs/examples
-sudo python3 quick_demo.py
+python3 quick_demo.py
 ```
 
 Watch it:
@@ -83,11 +88,11 @@ Watch it:
 ## 🦖  Example 2 — ResNet‑18 *resnet_demo.py*
 
 ```bash
-sudo python3 examples/resnet_demo.py
+python3 examples/resnet_demo.py
 ```
 
 ## 🕰️ Git‑Time‑Machine Demo (🚀 new!)
-```
+```bash
 python examples/git_time_machine_demo.py
 ```
 🕸️ MLFS mounts Inception v3 as regular files.
@@ -104,7 +109,7 @@ git diff shows a ☝️‑byte hex delta.
 
 ## 🦊 Example 3 — ONNX Model *onnx_demo.py* (🚀 new!)
 ```bash
-sudo python3 examples/onnx_demo.py
+python3 examples/onnx_demo.py
 ```
 This demo:
 1. Creates a simple neural network
