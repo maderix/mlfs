@@ -1,4 +1,4 @@
-# 💃🔥 MLFS – Machine Learning File­system 💃🔥
+# 💃🔥 MLFS – Machine Learning Filesystem 💃🔥
 
 *Mount your model like a USB stick and `cd` straight into its brain.*
 
@@ -6,17 +6,17 @@
 
 ## 🤔  What‐the‐heck‑is‑this?
 
-MLFS is a tiny <abbr title="Filesystem in Userspace">FUSE</abbr> driver that turns a **PyTorch** model into a directory tree:
+MLFS is a tiny <abbr title="Filesystem in Userspace">FUSE</abbr> driver that turns a **PyTorch** or **ONNX** model into a directory tree:
 
 ```
 /sys/          ← version, banner, full model string
 /model/        ← every layer → folder  •   tensors → files  •   grads → *.grad
 /activations/  ← forward‑pass dumps
-/ir/           ← TorchScript graph
+/ir/           ← TorchScript/ONNX graph
 /logs/         ← tail ‑f me plz
 ```
 
-`ls`, `cat`, `diff`, `grep`… if your shell can touch it, it can now poke your network’s guts.
+`ls`, `cat`, `diff`, `grep`… if your shell can touch it, it can now poke your network's guts.
 
 ---
 
@@ -24,18 +24,18 @@ MLFS is a tiny <abbr title="Filesystem in Userspace">FUSE</abbr> driver that tur
 
 ```bash
 sudo apt install fuse              # (Linux) – macOS: brew install macfuse
-pip install torch torchvision fusepy
+pip install torch torchvision fusepy onnx
 ```
 
 ---
 
-## 🎸  Mount n’ Roll
+## 🎸  Mount n' Roll
 
 ```bash
 # make a playground mountpoint
 sudo mkdir -p /mnt/mlfs
 
-# export any .pt you like (here we cook a ResNet‑18)
+# export any .pt or .onnx you like (here we cook a ResNet‑18)
 python - <<'PY'
 import torch, torchvision as tv
 torch.save(tv.models.resnet18(weights=None), 'resnet18.pt')
@@ -63,7 +63,7 @@ sudo fusermount -u /mnt/mlfs   # linux
 
 ---
 
-## 🐣  Example 1 — Tiny MLP *quick\_demo.py*
+## 🐣  Example 1 — Tiny MLP *quick_demo.py*
 
 ```bash
 cd mlfs/examples
@@ -80,27 +80,37 @@ Watch it:
 
 ---
 
-## 🦖  Example 2 — ResNet‑18 *resnet\_demo.py*
+## 🦖  Example 2 — ResNet‑18 *resnet_demo.py*
 
 ```bash
 sudo python3 examples/resnet_demo.py
 ```
 
-## 🕰️ Git‑Time‑Machine Demo (🚀 new!)
+## 🕰️ Git‑Time‑Machine Demo (🚀 new!)
 ```
 python examples/git_time_machine_demo.py
 ```
-🕸️ MLFS mounts Inception v3 as regular files.
+🕸️ MLFS mounts Inception v3 as regular files.
 ```
-📸 git commit of /model = v1.
+📸 git commit of /model = v1.
 ```
-🔪 Flip one byte in a weight via the FS, commit again = v2.
+🔪 Flip one byte in a weight via the FS, commit again = v2.
 ```
 git diff shows a ☝️‑byte hex delta.
 ```
-⏪ git checkout v1 rewinds the network instantly—no reloads, no downtime.
+⏪ git checkout v1 rewinds the network instantly—no reloads, no downtime.
 
-## 🎉 Your neural net now responds to git log, git diff, and git checkout like any ordinary code repo.  Time‑travel debugging with zero custom tools!
+## 🎉 Your neural net now responds to git log, git diff, and git checkout like any ordinary code repo.  Time‑travel debugging with zero custom tools!
+
+## 🦊 Example 3 — ONNX Model *onnx_demo.py* (🚀 new!)
+```bash
+sudo python3 examples/onnx_demo.py
+```
+This demo:
+1. Creates a simple neural network
+2. Exports it to ONNX format
+3. Mounts it using MLFS
+4. Shows how to explore the model structure and weights
 
 This heftier demo lists deep sub‑blocks (`layer1/0/conv1`) and dumps the raw conv1 tensor to prove MLFS handles real architectures.
 
@@ -126,18 +136,18 @@ This heftier demo lists deep sub‑blocks (`layer1/0/conv1`) and dumps the raw c
 ---
 
 
-## 🔭 Roadmap — where MLFS can venture next 🚀
+## 🔭 Roadmap — where MLFS can venture next 🚀
 
 | Track | What it buys you | Effort estimate | Caveats / Gotchas |
 |-------|------------------|-----------------|-------------------|
-| **ONNX / TensorFlow / TFLite back‑ends** | Mount *any* framework’s weights→ same tree → cross‑tool diffing & hacks | **Medium** – parse each format once, expose tensors as `memoryview` | ONNX & TF easy (protobuf blobs); TFLite flatbuffers parser needed |
+| **ONNX / TensorFlow / TFLite back‑ends** | Mount *any* framework's weights→ same tree → cross‑tool diffing & hacks | **Medium** – parse each format once, expose tensors as `memoryview` | ONNX & TF easy (protobuf blobs); TFLite flatbuffers parser needed |
 | **GPU‑mmap weights (GPUDirect Storage)** | Model bytes stream straight from file into GPU memory – no CPU copy, instant warm‑up | **Hard** – integrate `cuFile` / `cudaMallocHost` pinned pages | Requires A100/H100‑class HW + kernel mods |
-| **Lazy safetensors index** | Sub‑second mount of 20 GB Llama; chunk‑SHA dedup across checkpoints | **Medium** – we already mmap safetensors, add index & cache | — |
+| **Lazy safetensors index** | Sub‑second mount of 20 GB Llama; chunk‑SHA dedup across checkpoints | **Medium** – we already mmap safetensors, add index & cache | — |
 | **Write‑back plugin** | FS edits → regenerate `.pt` / `.safetensors` automatically | **Easy** – invert `build_tree`, embed dtype/shape in `/sys` | — |
 | **Activation shared‑memory taps** | Another process can `mmap` live feature maps → real‑time viz | **Medium‑Hard** – expose `/activations/*` as shm, need sync | Needs inotify/futex protocol |
 | **FUSE‑dmabuf zero‑copy tensors** | Kernel hands GPU a dmabuf handle → true zero‑copy train | **Research** – pending upstream FUSE patches | bleeding‑edge kernel only |
 
-> **Legend** – *Effort* ≈ weekend hack = Easy, few weekends = Medium, research rabbit‑hole = Hard
+> **Legend** – *Effort* ≈ weekend hack = Easy, few weekends = Medium, research rabbit‑hole = Hard
 
 
 ---
@@ -146,4 +156,4 @@ This heftier demo lists deep sub‑blocks (`layer1/0/conv1`) and dumps the raw c
 
 MIT.  Go forth and mount exotically.
 
-> “**Everything is a file**… even a 175‑billion‑parameter fever dream.” – some POSIX wizard
+> "**Everything is a file**… even a 175‑billion‑parameter fever dream." – some POSIX wizard

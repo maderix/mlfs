@@ -1,18 +1,21 @@
 #!/usr/bin/env python3
 """
-MLFS – Machine‑Learning FileSystem  (v 0.5)
+MLFS – Machine‑Learning FileSystem  (v 0.6)
 
 * Zero‑copy memoryview weights  → fast mount, low RAM
 * --state-dict loads a raw weights file (no nn.Module unpickle)
 * --unsafe-write still lets you edit *.bin if you dare
+* ONNX model support added
 """
 
 import os, sys, errno, time, stat, argparse, logging
 from collections import OrderedDict
 from threading import RLock
-from typing import Mapping
+from typing import Mapping, Union
+import numpy as np
 
 import torch
+import onnx
 from fuse import FUSE, FuseOSError, Operations
 
 # ───────── helpers ──────────────────────────────────────────────────────────
@@ -37,31 +40,93 @@ class VNode:
         )
 
 # ───────── build tree ───────────────────────────────────────────────────────
-def build_tree(source: Mapping[str, torch.Tensor], meta_str: str) -> VNode:
+def build_tree(source: Union[Mapping[str, torch.Tensor], onnx.ModelProto], meta_str: str) -> VNode:
     root = VNode("/", stat.S_IFDIR | 0o755)
 
     sysd = VNode("sys", stat.S_IFDIR | 0o555); root.children["sys"] = sysd
-    for k, v in {"version": "0.5‑mview", "model_str": meta_str}.items():
+    for k, v in {"version": "0.6‑mview", "model_str": meta_str}.items():
         f = VNode(k, stat.S_IFREG | 0o444); f.data = v.encode(); sysd.children[k] = f
 
     modeld = VNode("model", stat.S_IFDIR | 0o755); root.children["model"] = modeld
-    for name, p in source.items():
-        parent = modeld
-        for part in name.split(".")[:-1]:
-            parent = parent.children.setdefault(part, VNode(part, stat.S_IFDIR | 0o755))
 
-        w = VNode(name.split(".")[-1] + ".bin", stat.S_IFREG | 0o444)
-        w.data = memoryview(p.detach().cpu().numpy()).cast("B")
-        parent.children[w.name] = w
+    if isinstance(source, onnx.ModelProto):
+        # Handle ONNX model
+        for initializer in source.graph.initializer:
+            name = initializer.name
+            
+            # Get the correct dtype from the tensor
+            dtype_map = {
+                1: np.float32,
+                2: np.uint8,
+                3: np.int8,
+                4: np.uint16,
+                5: np.int16,
+                6: np.int32,
+                7: np.int64,
+                8: np.bytes_,
+                9: np.bool_,
+                10: np.float16,
+                11: np.float64,
+                12: np.uint32,
+                13: np.uint64,
+                14: np.complex64,
+                15: np.complex128,
+            }
+            dtype = dtype_map.get(initializer.data_type, np.float32)
+            
+            # Handle different data storage formats
+            if initializer.raw_data:
+                tensor = np.frombuffer(initializer.raw_data, dtype=dtype)
+            elif initializer.float_data:
+                tensor = np.array(initializer.float_data, dtype=np.float32)
+            elif initializer.int32_data:
+                tensor = np.array(initializer.int32_data, dtype=np.int32)
+            elif initializer.int64_data:
+                tensor = np.array(initializer.int64_data, dtype=np.int64)
+            elif initializer.string_data:
+                tensor = np.array(initializer.string_data, dtype=np.bytes_)
+            else:
+                logging.warning(f"Skipping tensor {name} - no data found")
+                continue
+                
+            # Reshape if dimensions are provided
+            if initializer.dims:
+                try:
+                    tensor = tensor.reshape(initializer.dims)
+                except ValueError as e:
+                    logging.warning(f"Could not reshape tensor {name}: {e}")
+                    continue
+            
+            parent = modeld
+            for part in name.split("/")[:-1]:
+                parent = parent.children.setdefault(part, VNode(part, stat.S_IFDIR | 0o755))
 
-        g = VNode(name.split(".")[-1] + ".grad", stat.S_IFREG | 0o666)
-        g.data = bytearray()            # start empty, writable
-        parent.children[g.name] = g
+            w = VNode(name.split("/")[-1] + ".bin", stat.S_IFREG | 0o444)
+            w.data = memoryview(tensor).cast("B")
+            parent.children[w.name] = w
+
+            g = VNode(name.split("/")[-1] + ".grad", stat.S_IFREG | 0o666)
+            g.data = bytearray()
+            parent.children[g.name] = g
+    else:
+        # Handle PyTorch model
+        for name, p in source.items():
+            parent = modeld
+            for part in name.split(".")[:-1]:
+                parent = parent.children.setdefault(part, VNode(part, stat.S_IFDIR | 0o755))
+
+            w = VNode(name.split(".")[-1] + ".bin", stat.S_IFREG | 0o444)
+            w.data = memoryview(p.detach().cpu().numpy()).cast("B")
+            parent.children[w.name] = w
+
+            g = VNode(name.split(".")[-1] + ".grad", stat.S_IFREG | 0o666)
+            g.data = bytearray()
+            parent.children[g.name] = g
 
     root.children["activations"] = VNode("activations", stat.S_IFDIR | 0o755)
 
     ird = VNode("ir", stat.S_IFDIR | 0o444); root.children["ir"] = ird
-    ird.children["graph.txt"] = VNode("graph.txt", stat.S_IFREG | 0o444)  # blank for state_dict
+    ird.children["graph.txt"] = VNode("graph.txt", stat.S_IFREG | 0o444)
 
     logd = VNode("logs", stat.S_IFDIR | 0o444); root.children["logs"] = logd
     logd.children["fuse.log"] = VNode("fuse.log", stat.S_IFREG | 0o444)
@@ -74,7 +139,11 @@ class MLFS(Operations):
         self.rwlock = RLock()
         self.allow_bin_write = allow_bin_write
 
-        if load_state_dict:
+        if ckpt_path.endswith('.onnx'):
+            model = onnx.load(ckpt_path)
+            self.root = build_tree(model, meta_str=f"ONNX model: {model.ir_version}")
+            logging.info("Loaded ONNX model %s", ckpt_path)
+        elif load_state_dict:
             weights = torch.load(ckpt_path, map_location="cpu", weights_only=True)
             self.root = build_tree(weights, meta_str=f"state_dict:{len(weights)} tensors")
             logging.info("Loaded state_dict %s (%d tensors)", ckpt_path, len(weights))
